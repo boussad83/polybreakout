@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Hexagon Breakout</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      font-family: Arial, sans-serif;
+      background-color: #121212;
+      color: white;
+    }
+    canvas {
+      background: #000;
+      border: 2px solid #444;
+      margin-bottom: 20px;
+    }
+    .controls {
+      width: 500px;
+      text-align: center;
+      margin-bottom: 20px;
+    }
+    .slider-container {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 10px;
+    }
+    .slider {
+      width: 300px;
+      margin: 0 15px;
+    }
+    .stats {
+      display: flex;
+      justify-content: space-between;
+      width: 500px;
+      margin-bottom: 10px;
+    }
+    .stat-box {
+      padding: 10px;
+      background-color: rgba(255, 255, 255, 0.1);
+      border-radius: 4px;
+      min-width: 100px;
+      text-align: center;
+    }
+    button {
+      padding: 10px 20px;
+      background-color: #2196F3;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 16px;
+      margin: 5px;
+    }
+    button:hover {
+      background-color: #0b7dda;
+    }
+    .game-over {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background-color: rgba(0, 0, 0, 0.8);
+      padding: 30px;
+      border-radius: 10px;
+      text-align: center;
+      display: none;
+    }
+    .instruction {
+      margin-top: 10px;
+      font-size: 14px;
+      color: #aaa;
+    }
+  </style>
+</head>
+<body>
+  <h1>Hexagon Breakout</h1>
+  
+  <div class="stats">
+    <div class="stat-box">Level: <span id="level">1</span></div>
+    <div class="stat-box">Time: <span id="time">0.0</span>s</div>
+    <div class="stat-box">Ball Speed: <span id="speed">3.0</span></div>
+  </div>
+  
+  <canvas id="gameCanvas" width="600" height="600"></canvas>
+  
+  <div class="controls">
+    <div class="slider-container">
+      <span>Rotate Hexagon:</span>
+      <input type="range" min="0" max="359" value="0" class="slider" id="rotationSlider">
+      <span id="rotationValue">0°</span>
+    </div>
+    <button id="startButton">Start Game</button>
+    <button id="resetButton">Reset Game</button>
+    <p class="instruction">Use the slider to rotate the hexagon and bounce the ball to break all the bricks!</p>
+  </div>
+  
+  <div class="game-over" id="gameOverScreen">
+    <h2>Level Complete!</h2>
+    <p>Your time: <span id="finalTime">0.0</span>s</p>
+    <p>Moving to level <span id="nextLevel">2</span>...</p>
+    <button id="continueButton">Continue to Next Level</button>
+  </div>
+
+  <script>
+    // Game Setup
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    const rotationSlider = document.getElementById('rotationSlider');
+    const rotationValue = document.getElementById('rotationValue');
+    const startButton = document.getElementById('startButton');
+    const resetButton = document.getElementById('resetButton');
+    const gameOverScreen = document.getElementById('gameOverScreen');
+    const continueButton = document.getElementById('continueButton');
+    const levelDisplay = document.getElementById('level');
+    const timeDisplay = document.getElementById('time');
+    const speedDisplay = document.getElementById('speed');
+    const finalTimeDisplay = document.getElementById('finalTime');
+    const nextLevelDisplay = document.getElementById('nextLevel');
+    
+    // Game variables
+    let gameActive = false;
+    let gameStartTime = 0;
+    let currentTime = 0;
+    let level = 1;
+    let baseBallSpeed = 3.0;
+    let ballSpeed = baseBallSpeed;
+    
+    // Hexagon properties
+    const centerX = canvas.width / 2;
+    const centerY = canvas.height / 2;
+    const hexRadius = 250;
+    let hexRotation = 0;
+    
+    // Ball properties
+    let ball = {
+      x: centerX,
+      y: centerY + 100,
+      radius: 10,
+      dx: 0,
+      dy: 0,
+      color: '#FFFFFF'
+    };
+    
+    // Brick properties
+    const brickRows = 3;
+    const brickCols = 5;
+    const brickWidth = 40;
+    const brickHeight = 20;
+    const brickPadding = 10;
+    const brickOffsetTop = 60;
+    let bricks = [];
+    let bricksRemaining = 0;
+    
+    // Initialize game
+    function initGame() {
+      // Reset ball
+      ball.x = centerX;
+      ball.y = centerY + 100;
+      
+      // Initialize bricks
+      createBricks();
+      
+      // Update display
+      levelDisplay.textContent = level;
+      timeDisplay.textContent = '0.0';
+      ballSpeed = baseBallSpeed + (level - 1) * 0.5;
+      speedDisplay.textContent = ballSpeed.toFixed(1);
+      
+      // Draw initial state
+      draw();
+    }
+    
+    // Create bricks in a grid pattern
+    function createBricks() {
+      bricks = [];
+      bricksRemaining = 0;
+      
+      // Calculate offset to center the brick grid
+      const totalBrickWidth = brickCols * (brickWidth + brickPadding) - brickPadding;
+      const brickOffsetLeft = centerX - totalBrickWidth / 2;
+      
+      for (let r = 0; r < brickRows; r++) {
+        for (let c = 0; c < brickCols; c++) {
+          const brickX = brickOffsetLeft + c * (brickWidth + brickPadding);
+          const brickY = centerY - brickOffsetTop + r * (brickHeight + brickPadding);
+          
+          // Add brick only if it's within the hexagon (roughly)
+          const distanceFromCenter = Math.sqrt(
+            Math.pow(brickX + brickWidth/2 - centerX, 2) + 
+            Math.pow(brickY + brickHeight/2 - centerY, 2)
+          );
+          
+          if (distanceFromCenter < hexRadius * 0.7) {
+            bricks.push({
+              x: brickX,
+              y: brickY,
+              width: brickWidth,
+              height: brickHeight,
+              status: 1,
+              color: getRandomColor()
+            });
+            bricksRemaining++;
+          }
+        }
+      }
+    }
+    
+    // Get random color for bricks
+    function getRandomColor() {
+      const colors = ['#FF5252', '#FF4081', '#E040FB', '#7C4DFF', '#536DFE', '#448AFF', '#40C4FF', '#18FFFF', '#64FFDA', '#69F0AE', '#B2FF59', '#EEFF41', '#FFFF00', '#FFD740', '#FFAB40', '#FF6E40'];
+      return colors[Math.floor(Math.random() * colors.length)];
+    }
+    
+    // Calculate hexagon points
+    function calculateHexagonPoints() {
+      const points = [];
+      for (let i = 0; i < 6; i++) {
+        const angle = (Math.PI / 3) * i + (hexRotation * Math.PI / 180);
+        const x = centerX + hexRadius * Math.cos(angle);
+        const y = centerY + hexRadius * Math.sin(angle);
+        points.push({ x, y });
+      }
+      return points;
+    }
+    
+    // Draw game elements
+    function draw() {
+      // Clear canvas
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      
+      // Draw hexagon
+      const hexPoints = calculateHexagonPoints();
+      ctx.beginPath();
+      ctx.moveTo(hexPoints[0].x, hexPoints[0].y);
+      for (let i = 1; i < hexPoints.length; i++) {
+        ctx.lineTo(hexPoints[i].x, hexPoints[i].y);
+      }
+      ctx.closePath();
+      ctx.strokeStyle = '#4CAF50';
+      ctx.lineWidth = 3;
+      ctx.stroke();
+      
+      // Draw bricks
+      for (let i = 0; i < bricks.length; i++) {
+        if (bricks[i].status === 1) {
+          ctx.beginPath();
+          ctx.rect(bricks[i].x, bricks[i].y, bricks[i].width, bricks[i].height);
+          ctx.fillStyle = bricks[i].color;
+          ctx.fill();
+          ctx.closePath();
+        }
+      }
+      
+      // Draw ball
+      ctx.beginPath();
+      ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
+      ctx.fillStyle = ball.color;
+      ctx.fill();
+      ctx.closePath();
+    }
+    
+    // Update game state
+    function update() {
+      if (!gameActive) return;
+      
+      // Move ball
+      ball.x += ball.dx;
+      ball.y += ball.dy;
+      
+      // Check brick collisions
+      for (let i = 0; i < bricks.length; i++) {
+        const brick = bricks[i];
+        if (brick.status === 1) {
+          if (
+            ball.x + ball.radius > brick.x &&
+            ball.x - ball.radius < brick.x + brick.width &&
+            ball.y + ball.radius > brick.y &&
+            ball.y - ball.radius < brick.y + brick.height
+          ) {
+            // Determine collision direction (simplified)
+            const overlapLeft = ball.x + ball.radius - brick.x;
+            const overlapRight = brick.x + brick.width - (ball.x - ball.radius);
+            const overlapTop = ball.y + ball.radius - brick.y;
+            const overlapBottom = brick.y + brick.height - (ball.y - ball.radius);
+            
+            // Find smallest overlap
+            const minOverlap = Math.min(overlapLeft, overlapRight, overlapTop, overlapBottom);
+            
+            // Bounce based on collision direction
+            if (minOverlap === overlapLeft || minOverlap === overlapRight) {
+              ball.dx = -ball.dx;
+            } else {
+              ball.dy = -ball.dy;
+            }
+            
+            // Remove brick
+            brick.status = 0;
+            bricksRemaining--;
+            
+            // Check if all bricks are gone
+            if (bricksRemaining === 0) {
+              gameActive = false;
+              currentTime = (Date.now() - gameStartTime) / 1000;
+              finalTimeDisplay.textContent = currentTime.toFixed(1);
+              nextLevelDisplay.textContent = level + 1;
+              gameOverScreen.style.display = 'block';
+            }
+            
+            break;
+          }
+        }
+      }
+      
+      // Check hexagon wall collisions
+      const hexPoints = calculateHexagonPoints();
+      for (let i = 0; i < hexPoints.length; i++) {
+        const p1 = hexPoints[i];
+        const p2 = hexPoints[(i + 1) % 6];
+        
+        if (lineCircleCollision(p1, p2, ball)) {
+          const dx = p2.x - p1.x;
+          const dy = p2.y - p1.y;
+          const wallAngle = Math.atan2(dy, dx);
+          const moveAngle = Math.atan2(ball.dy, ball.dx);
+          const newAngle = 2 * wallAngle - moveAngle;
+          
+          const speed = Math.sqrt(ball.dx * ball.dx + ball.dy * ball.dy);
+          ball.dx = speed * Math.cos(newAngle);
+          ball.dy = speed * Math.sin(newAngle);
+        }
+      }
+      
+      // Update time display
+      if (gameActive) {
+        currentTime = (Date.now() - gameStartTime) / 1000;
+        timeDisplay.textContent = currentTime.toFixed(1);
+      }
+      
+      // Draw updated state
+      draw();
+    }
+    
+    // Check collision between a line segment and a circle
+    function lineCircleCollision(p1, p2, circle) {
+      // Vector from p1 to p2
+      const v1x = p2.x - p1.x;
+      const v1y = p2.y - p1.y;
+      
+      // Vector from p1 to circle center
+      const v2x = circle.x - p1.x;
+      const v2y = circle.y - p1.y;
+      
+      // Length of line segment
+      const len = Math.sqrt(v1x * v1x + v1y * v1y);
+      
+      // Unit vector along line
+      const ux = v1x / len;
+      const uy = v1y / len;
+      
+      // Projection of v2 onto the line
+      const dp = v2x * ux + v2y * uy;
+      
+      // Closest point on line to circle
+      let closestX, closestY;
+      
+      if (dp < 0) {
+        // p1 is closest
+        closestX = p1.x;
+        closestY = p1.y;
+      } else if (dp > len) {
+        // p2 is closest
+        closestX = p2.x;
+        closestY = p2.y;
+      } else {
+        // Point along line is closest
+        closestX = p1.x + dp * ux;
+        closestY = p1.y + dp * uy;
+      }
+      
+      // Distance from closest point to circle center
+      const distance = Math.sqrt(
+        Math.pow(closestX - circle.x, 2) + 
+        Math.pow(closestY - circle.y, 2)
+      );
+      
+      // Check collision
+      return distance <= circle.radius;
+    }
+    
+    // Start game
+    function startGame() {
+      if (!gameActive) {
+        gameActive = true;
+        gameStartTime = Date.now();
+        
+        // Set initial ball direction
+        const angle = Math.random() * Math.PI / 2 + Math.PI / 4;
+        ball.dx = ballSpeed * Math.cos(angle);
+        ball.dy = -ballSpeed * Math.sin(angle);
+        
+        // Hide game over screen if visible
+        gameOverScreen.style.display = 'none';
+      }
+    }
+    
+    // Reset game
+    function resetGame() {
+      gameActive = false;
+      level = 1;
+      ballSpeed = baseBallSpeed;
+      initGame();
+      gameOverScreen.style.display = 'none';
+    }
+    
+    // Continue to next level
+    function nextLevel() {
+      level++;
+      ballSpeed = baseBallSpeed + (level - 1) * 0.5;
+      initGame();
+      gameOverScreen.style.display = 'none';
+    }
+    
+    // Event listeners
+    rotationSlider.addEventListener('input', function() {
+      hexRotation = parseInt(this.value);
+      rotationValue.textContent = hexRotation + '°';
+      draw();
+    });
+    
+    startButton.addEventListener('click', startGame);
+    resetButton.addEventListener('click', resetGame);
+    continueButton.addEventListener('click', nextLevel);
+    
+    // Game loop
+    function gameLoop() {
+      update();
+      requestAnimationFrame(gameLoop);
+    }
+    
+    // Initialize game and start loop
+    initGame();
+    gameLoop();
+  </script>
+</body>
+</html>
