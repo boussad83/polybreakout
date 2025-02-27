@@ -18,3 +18,6 @@ Hexa-Breakout Demo:
 Poly-Breakout Demo:
 
 [Polybreakout demo](https://github.com/user-attachments/assets/04dd1ffd-dbea-4130-9924-24d51d54f729)
+
+
+PS: I created these games with the help of AI (Claude Sonnet 3.7).
