@@ -5,6 +5,7 @@ The goal is to breal the breaks as quickest as possible.
 
 Good Luck !
 
-[A record of the game using an hexagon](assets/Hexa-Breakout.mp4)
+Here is a demo:
 
-<video src="assets/Hexa-Breakout.mp4"></video>
+
+<video src="https://github.com/boussad83/polybreakout/blob/main/assets/Hexa-Breakout.mp4"></video>
