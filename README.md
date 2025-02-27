@@ -6,3 +6,5 @@ The goal is to breal the breaks as quickest as possible.
 Good Luck !
 
 [A record of the game using an hexagon](assets/Hexa-Breakout.mp4)
+
+<video src="assets/Hexa-Breakout.mp4"></video>
